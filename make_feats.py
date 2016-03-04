@@ -4,6 +4,7 @@ import codecs
 import itertools
 import json
 import pdb
+from pprint import pprint
 import sys
 from optparse import OptionParser
 
@@ -20,17 +21,15 @@ from edu.jhu.pacaya.gm.data import LabeledFgExample, FgExampleList
 from edu.jhu.pacaya.gm.feat import FeatureVector
 from edu.jhu.pacaya.gm.model import FactorGraph, FgModel, Var, VarSet, VarConfig
 from edu.jhu.pacaya.gm.train import CrfTrainer
-
-from ed import edsimple
 from training_classes import TrainingInstance
 
 global TT_FACTOR, TO_FACTOR, TC_FACTOR, factor_cell_to_features, feature_label2id, BLANK, CORRECT_BLANK
 TT_FACTOR = u'tt_factor'
 TO_FACTOR = u'to_factor'
 TC_FACTOR = u'tc_factor'
-BLANK = u'__BLANK__'
+BLANK = u'__blank__'
 UNK = u'__UNK__'
-CORRECT_BLANK = u'__CORRECT_BLANK__'
+CORRECT_BLANK = u'__blank__'
 factor_cell_to_features = {}
 feature_label2id = {}
 global obs2id, tag2id, id2obs, id2tag, tag_list, obs_list
@@ -52,10 +51,10 @@ sys.stdout.encoding = 'utf-8'
 
 
 class UnCachedFgList(FgExampleList):
-    def __init__(self, training_instanes, states_per_sent):
+    def __init__(self, training_instanes, en_vocab):
         FgExampleList.__init__(self)
         self.training_instances = training_instanes
-        self.states_per_sentence = states_per_sent
+        self.en_vocab = en_vocab
 
     def size(self):
         return len(self.training_instances)
@@ -65,32 +64,37 @@ class UnCachedFgList(FgExampleList):
         clamp = False
         if cso.lang == 'en':
             # has no emission factor as hc is clamped, e_factor's messages will not affect belief
-            hidden_state = cso.l2_word if cso.l2_word.strip() != '' else CORRECT_BLANK
+            hidden_state = cso.l2_word.lower().strip() if cso.l2_word.strip() != '' else BLANK
+            if hidden_state not in tag_list:
+                print 'im here!'
+                pdb.set_trace()
             clamp = True
-            # print hidden_state, 'is already in english i.e revealed'
+
+            print hidden_state, 'is already in english i.e revealed'
+
         elif cso_id in curr_rg:
             # has been revealed so hidden var should be clamped to the correct guess
             # hidden_state = curr_rg[cso_id].guess if curr_rg[cso_id].guess.strip() != '' else CORRECT_BLANK
-            hidden_state = cso.l1_parent.strip() if cso.l1_parent.strip() != '' else CORRECT_BLANK
+            hidden_state = cso.l1_parent.strip().lower() if cso.l1_parent.strip().lower() != '' else BLANK
             clamp = True
-            # print hidden_state, 'is the revealed guess at position', cso_pid, 'sn id', cso_id
+            print hidden_state, 'is the revealed guess at position', cso_id
         else:
             if cso_id not in curr_g:
                 pdb.set_trace()
             # has not yet been revealed, this is a genuine guess
-            hidden_state = curr_g[cso_id].guess if curr_g[cso_id].guess.strip() != '' else BLANK
-            # print hidden_state, 'is the current guess at position', cso_pid, 'sn id', cso_id
+            hidden_state = curr_g[cso_id].guess.lower() if curr_g[cso_id].guess.lower().strip() != '' else BLANK
+            print hidden_state, 'is the current guess at position',cso_id
 
         if ' ' in hidden_state:  # a hackish way to remove a phrasal guess...
-            hidden_state_len, hidden_state = sorted([(len(h), h) for h in hidden_state.split()]).pop()
+            #pdb.set_trace()
+            hidden_state_len, hidden_state = sorted([(len(h), h.lower()) for h in hidden_state.split()]).pop()
         return clamp, hidden_state
 
     def get(self, i):
         global tag2id, id2tag, obs2id, id2obs, obs_list
+        #pdb.set_trace()
         ti = self.training_instances[i]
-        tag_subset = self.states_per_sentence[int(ti.current_sent[0].sent_id)]
-        tag_subset.append(BLANK)
-        tag_subset.append(CORRECT_BLANK)
+        tag_subset = self.en_vocab
         factor_graph = FactorGraph()
         vc = VarConfig()
         curr_g = {}
@@ -114,20 +118,19 @@ class UnCachedFgList(FgExampleList):
         curr_s_order.sort()
         var_map = {}
         fac_map = {}
+        #pdb.set_trace()
         # fac_map_summary = {}
         for cso_id0, cso0 in curr_s_order:
             c, hs = self.get_hs(cso0, curr_rg, curr_g)
-            # print c, hs
-            if hs == BLANK:
-                hc_var = Var(Var.VarType.LATENT, len(tag_subset), 'TAG_' + str(cso_id0), tag_subset)
-                var_map[cso_id0] = (hc_var, hs, c)
-            else:
-                hc_var = Var(Var.VarType.PREDICTED, len(tag_subset), 'TAG_' + str(cso_id0), tag_subset)
-                var_map[cso_id0] = (hc_var, hs, c)
+            print c, hs
+            hc_var = Var(Var.VarType.PREDICTED, len(tag_subset), 'TAG_' + str(cso_id0), tag_subset)
+            var_map[cso_id0] = (hc_var, hs, c)
+
             if not c:
                 try:
                     vc.put(hc_var, hs)
                 except:
+                    print hs
                     print 'vc is broken...'
                     pdb.set_trace()
                 assert cso0.id not in curr_rg
@@ -147,7 +150,7 @@ class UnCachedFgList(FgExampleList):
                         fid = tuple(sorted([(cso_id1, 'h'), (cso_id2, 'h')]))
                         # there can be only 1 TT factor between 2 unobserved vars
                         if fid not in fac_map:
-                            # print fid, 'both are hidden'
+                            print fid, 'both are hidden'
                             t_varset = VarSet(v1_hc)
                             t_varset.add(v2_hc)
                             t_factor = TTFactor(t_varset, var1=v1_hc,
@@ -161,7 +164,7 @@ class UnCachedFgList(FgExampleList):
                     elif not v1_c and v2_c:  # var 2 is reveled i.e. observed
                         fid = tuple(sorted([(cso_id1, 'h'), (cso_id2, 'r')]))
                         if fid not in fac_map:
-                            # print cso_id1, ' is hidden', cso_id2, 'is reveled'
+                            print cso_id1, ' is hidden', cso_id2, 'is reveled'
                             t_factor = ObservedTFactor(VarSet(v1_hc),
                                                        var1=v1_hc,
                                                        var1pos=cso_id1,
@@ -176,7 +179,7 @@ class UnCachedFgList(FgExampleList):
                     elif v1_c and not v2_c:  # var 1 is reveled i.e. observed
                         fid = tuple(sorted([(cso_id1, 'r'), (cso_id2, 'h')]))
                         if fid not in fac_map:
-                            # print cso_id2, 'is hidden', cso_id1, 'is reveled'
+                            print cso_id2, 'is hidden', cso_id1, 'is reveled'
                             t_factor = ObservedTFactor(VarSet(v2_hc),
                                                        var1=None,
                                                        var1pos=None,
@@ -227,6 +230,7 @@ class ObservedTFactor(ExFactor):
         ExFactor.__init__(self, varset)
         global TT_FACTOR
         assert isinstance(observed_state, str) or isinstance(observed_state, unicode)
+        print 'observed state is', observed_state, len(tag_list)
         assert observed_state in tag_list
         self.var1 = var1
         self.var2 = var2
@@ -390,8 +394,12 @@ def get_instance(ti_line):
     guesses = [g.split() for g in guesses]
     obs = [o.split() for o in obs]
     guesses_flat = sum(guesses, [])
-    obs_flat = sum(obs, [])
+    #for gf in guesses_flat:
+    #    add_to_tags(gf)
 
+    obs_flat = sum(obs, [])
+    for of in obs_flat:
+        add_to_obs(of)
     return ti, obs_flat, guesses_flat
 
 
@@ -400,59 +408,51 @@ if __name__ == '__main__':
     # insert options here
     opt.add_option('--test', dest='test_file', default='')
     opt.add_option('--train', dest='train_file', default='')
-    opt.add_option('--states', dest='states_file', default='')
-    opt.add_option('--lm', dest='lm', default='')
+    opt.add_option('--ev', dest='en_vocab', default='')
+    opt.add_option('--dv', dest='de_vocab', default='')
+    opt.add_option('--pos', dest='en_en2pos_pos', default='')
+    opt.add_option('--ud', dest='en_en2ud', default='')
+    opt.add_option('--ed', dest='en_en2editdistance', default='')
+    opt.add_option('--pre', dest='en_de2pre', default='')
+    opt.add_option('--wiwj', dest='en_de2wiwj', default='')
     (options, _) = opt.parse_args()
-    if options.test_file.strip() == '' or options.train_file.strip() == '' or options.states_file.strip() == '':
+    if options.test_file.strip() == '' or \
+                    options.train_file.strip() == '' or \
+                    options.en_vocab.strip() == '' or options.de_vocab.strip() == '':
         sys.stderr.write(
                 "Usage: jython make_feats.py "
                 "--train [train file] "
                 "--test [test file] "
-                "--states [states file]\n")
+                "--ev [eng vocab file]"
+                "--dv [ger vocab file]"
+                "--pos [en-en2pos-pos feat]"
+                "--ud [en-en2ud feat]"
+                "--ed [en-de2editdistance feat]"
+                "--pre [en-de2pre feat]"
+                "--wiwj [en-en2wi-given-wj feat]\n")
         sys.exit(1)
+    else:
+        pass
     # blm = BLM(options.lm)
-    states_per_sentence = {}
-    all_states = set([])
-    for line in codecs.open(options.states_file, 'r', 'utf8').readlines():
-        items = line.split()
-        sent_id = int(items[0])
-        states_per_sentence[sent_id] = list(set(items[1:]))
-        all_states.update(list(set(items[1:])))
-
-    obs_set = set([])
-    tag2id = {}
-    add_to_tags(BLANK)
-    add_to_tags(CORRECT_BLANK)
-    add_to_tags(UNK)
-
     training_ti = []
     testing_ti = []
     for line in codecs.open(options.train_file, 'r', 'utf8').readlines():
         ti, obs, guess = get_instance(line)
-        sid = int(ti.current_sent[0].sent_id)
-        for s in states_per_sentence[sid]:
-            add_to_tags(s)
-        for g in guess:
-            add_to_tags(g)
-        for o in obs:
-            add_to_obs(o)
         training_ti.append(ti)
 
     for line in open(options.test_file).readlines():
         ti, obs, guess = get_instance(line)
-        for g in guess:
-            add_to_tags(g)
-        for o in obs:
-            add_to_obs(o)
         testing_ti.append(ti)
-    print 'len total tags:', len(tag2id)
-    print 'len obs:', len(obs2id)
-    print 'populating features...'
-    populate_features()
-    print 'num features', len(feature_label2id)
-    # blm = BLM(options.lm)
-    uc_training = UnCachedFgList(training_instanes=training_ti, states_per_sent=states_per_sentence)
+
+    en_vocab = [i.strip() for i in codecs.open(options.en_vocab, 'r', 'utf8').readlines() if i.strip() != '']
+    de_vocab = [i.strip() for i in codecs.open(options.de_vocab, 'r', 'utf8').readlines() if i.strip() != '']
+    for env in en_vocab:
+        add_to_tags(env)
+    uc_training = UnCachedFgList(training_instanes=training_ti, en_vocab=en_vocab)
+    for idx, ti in enumerate(training_ti):
+        print idx, uc_training.get(idx)
     trainer = CrfTrainer(get_trainer_prm())
+    exit(1)
     feature_ids, feature_labels = zip(*sorted([(v, k) for k, v in feature_label2id.iteritems()]))
     # initialize weight for each feature
     factor_graph_model = FgModel(len(feature_label2id), list(feature_labels))
