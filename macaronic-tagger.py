@@ -30,7 +30,7 @@ from training_classes import TrainingInstance, Guess, SimpleNode
 # features fired key: configuration of var set
 # value list of tuples, (feature_label, feature_value)
 factor_cell_to_features = {}
-feature_idxs = {}
+feature_label2id = {}
 
 
 class ObservedFactor(ExplicitExpFamFactor):
@@ -48,7 +48,7 @@ class ObservedFactor(ExplicitExpFamFactor):
         # print 'config_id:', configuration_id, 'config:' , state1, self.factor_type
         # print 'vars:' , self.var_list[0].name, self.observed_state
         feats_fired = factor_cell_to_features[(self.factor_type, state1, self.observed_state)]
-        feat_idxs = [(feature_idxs[f_label], f_val) for f_label, f_val in feats_fired]
+        feat_idxs = [(feature_label2id[f_label], f_val) for f_label, f_val in feats_fired]
         feats = zip(*feat_idxs)
         return FeatureVector(list(feats[0]), list(feats[1]))
 
@@ -68,7 +68,7 @@ class CRFFactor(ExplicitExpFamFactor):
         # print 'config_id:', configuration_id, 'config:' , state1, state2, self.factor_type
         # print 'vars:' , self.var_list[0].name, self.var_list[1].name
         feats_fired = factor_cell_to_features[(self.factor_type, state1, state2)]
-        feat_idxs = [(feature_idxs[f_label], f_val) for f_label, f_val in feats_fired]
+        feat_idxs = [(feature_label2id[f_label], f_val) for f_label, f_val in feats_fired]
         feats = zip(*feat_idxs)
         return FeatureVector(list(feats[0]), list(feats[1]))
 

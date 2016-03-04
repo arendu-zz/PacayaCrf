@@ -44,14 +44,17 @@ class EditDistance(object):
         inset_penalty = 1
         delete_penalty = 1
         table = np.zeros((len(a) + 1, len(b) + 1), dtype=float)
+
         came_from = {}
         # table = np.ones((len(a) + 1, len(b) + 1))
         for i in range(len(a) + 1):
             table[i, 0] = delete_penalty * i  # i
+
             came_from[i, 0] = (i - 1, 0), (a[i - 1], '<eps>')
 
         for j in range(len(b) + 1):
             table[0, j] = inset_penalty * j  # j
+
             came_from[0, j] = (0, j - 1), ('<eps>', b[j - 1])
 
         # print 'start'
@@ -83,6 +86,7 @@ class EditDistance(object):
         inset_penalty = 5e-1
         delete_penalty = 5e-1
         table = np.zeros((len(a) + 1, len(b) + 1), dtype=float)
+
         came_from = {}
         # table = np.ones((len(a) + 1, len(b) + 1))
         for i in range(len(a) + 1):

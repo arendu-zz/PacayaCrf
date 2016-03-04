@@ -20,7 +20,7 @@ from edu.jhu.pacaya.gm.train import CrfTrainer
 # features fired key: configuration of var set
 # value list of tuples, (feature_label, feature_value)
 factor_cell_to_features = {}
-feature_idxs = {}
+feature_label2id = {}
 
 
 class ObservedFactor(ExplicitExpFamFactor):
@@ -38,7 +38,7 @@ class ObservedFactor(ExplicitExpFamFactor):
         # print 'config_id:', configuration_id, 'config:' , state1, self.factor_type
         # print 'vars:' , self.var_list[0].name, self.observed_state
         feats_fired = factor_cell_to_features[(self.factor_type, state1, self.observed_state)]
-        feat_idxs = [(feature_idxs[f_label], f_val) for f_label, f_val in feats_fired]
+        feat_idxs = [(feature_label2id[f_label], f_val) for f_label, f_val in feats_fired]
         feats = zip(*feat_idxs)
         return FeatureVector(list(feats[0]), list(feats[1]))
 
@@ -58,7 +58,7 @@ class CRFFactor(ExplicitExpFamFactor):
         # print 'config_id:', configuration_id, 'config:' , state1, state2, self.factor_type
         # print 'vars:' , self.var_list[0].name, self.var_list[1].name
         feats_fired = factor_cell_to_features[(self.factor_type, state1, state2)]
-        feat_idxs = [(feature_idxs[f_label], f_val) for f_label, f_val in feats_fired]
+        feat_idxs = [(feature_label2id[f_label], f_val) for f_label, f_val in feats_fired]
         feats = zip(*feat_idxs)
         return FeatureVector(list(feats[0]), list(feats[1]))
 
@@ -156,10 +156,10 @@ if __name__ == '__main__':
     (options, _) = opt.parse_args()
     if options.feats_file == '' or options.train_file == '' or options.test_file == '':
         sys.stderr.write("Usage: jython tagger-of.py --feats [feats file] --train [train file] --test [test file]\n")
-    tag_list, obs_list, factor_cell_to_features, feature_idxs = load_factor_features(options.feats_file)
+    tag_list, obs_list, factor_cell_to_features, feature_label2id = load_factor_features(options.feats_file)
     training_instances = make_instances(options.train_file, tag_list, obs_list)
     trainer = CrfTrainer(get_trainer_prm())
-    factor_graph_model = FgModel(len(feature_idxs))
+    factor_graph_model = FgModel(len(feature_label2id))
     trainer.train(factor_graph_model, training_instances)
     testing_instances = make_instances(options.test_file, tag_list, obs_list)
     correct_label_count = 0
